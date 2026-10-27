@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "harbourline-db": {
+      "command": "node",
+      "args": ["mcp/dist/server.js"],
+      "env": {
+        "HARBOURLINE_MCP_DSN": "${HARBOURLINE_MCP_DSN}"
+      }
+    }
+  }
+}

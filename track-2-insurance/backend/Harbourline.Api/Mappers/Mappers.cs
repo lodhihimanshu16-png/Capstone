@@ -25,7 +25,7 @@ public static class ProductMapper
 
 public static class UserMapper
 {
-    public static UserDto ToDto(AppUser u) => new(u.Id, u.Email, u.PasswordHash, u.Role, u.DisplayName, u.Active, u.CreatedAt);
+    public static UserDto ToDto(AppUser u) => new(u.Id, u.Email, u.Role, u.DisplayName, u.Active, u.CreatedAt);
 }
 
 public static class HandlerMapper
@@ -74,7 +74,7 @@ public static class ClaimMapper
 {
     public static ClaimDto ToDto(Claim c, bool reserveReviewDue) => new(c.Id, c.ClaimNumber, c.PolicyId, c.HandlerId, c.ClaimType, c.Status, c.LossDate,
         c.ReportedDate, c.Description, c.EstimatedAmount, c.ApprovedAmount, c.PaidAmount, c.Excess, c.RegionId, c.ReopenedCount, c.ClosedDate,
-        c.ExternalRef, c.CreatedAt, c.UpdatedAt, reserveReviewDue);
+        c.ExternalRef, c.CreatedAt, c.UpdatedAt, reserveReviewDue, c.AssessedByUserId, c.ApprovedByUserId, c.SettlementAmount);
 
     public static ClaimListItemDto ToListItem(Claim c, Policy policy, Policyholder holder, Product product, Handler? handler, int noteCount) =>
         new(c.Id, c.ClaimNumber, policy.PolicyNumber, holder.FullName, product.Name, handler?.Name, c.Status, c.ClaimType, c.LossDate,
@@ -82,7 +82,7 @@ public static class ClaimMapper
 
     public static ClaimNoteDto ToDto(ClaimNote n) => new(n.Id, n.ClaimId, n.AuthorUserId, n.NoteType, n.Body, n.CreatedAt);
 
-    public static ClaimHistoryDto ToDto(ClaimStatusHistory h) => new(h.Id, h.ClaimId, h.FromStatus, h.ToStatus, h.ChangedByUserId, h.ChangedAt, h.Reason);
+    public static ClaimHistoryDto ToDto(ClaimStatusHistory h) => new(h.Id, h.ClaimId, h.FromStatus, h.ToStatus, h.ChangedByUserId, h.ChangedAt, h.Reason, h.Amount);
 }
 
 public static class ImportBatchMapper

@@ -104,8 +104,26 @@ public class Claim
     public string? ExternalRef { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public int? AssessedByUserId { get; set; }
+    public int? ApprovedByUserId { get; set; }
+    public decimal? SettlementAmount { get; set; }
+    /// <summary>Optimistic concurrency token (BR-15). Incremented on every save of the claim.</summary>
+    public int RowVersion { get; set; }
     public Policy? Policy { get; set; }
     public Handler? Handler { get; set; }
+}
+
+/// <summary>A refused approval (BR-06 or BR-07), kept for the limits report (BR-17).</summary>
+public class ClaimApprovalAttempt
+{
+    public int Id { get; set; }
+    public int ClaimId { get; set; }
+    public int UserId { get; set; }
+    public string? GradeCode { get; set; }
+    public decimal? ApprovalLimit { get; set; }
+    public decimal Amount { get; set; }
+    public string Reason { get; set; } = "";
+    public DateTime AttemptedAt { get; set; }
 }
 
 public class ClaimNote
@@ -127,6 +145,7 @@ public class ClaimStatusHistory
     public int ChangedByUserId { get; set; }
     public DateTime ChangedAt { get; set; }
     public string? Reason { get; set; }
+    public decimal? Amount { get; set; }
 }
 
 public class ImportBatch
@@ -145,6 +164,7 @@ public class ImportBatch
 public static class ClaimStatuses
 {
     public const string New = "New";
+    public const string Triaged = "Triaged";
     public const string Assessing = "Assessing";
     public const string Approved = "Approved";
     public const string Declined = "Declined";
@@ -152,6 +172,11 @@ public static class ClaimStatuses
     public const string Closed = "Closed";
     public const string Reopened = "Reopened";
 
-    public static readonly string[] All = { New, Assessing, Approved, Declined, Settled, Closed, Reopened };
-    public static readonly string[] Open = { New, Assessing, Approved, Reopened };
+    public static readonly string[] All = { New, Triaged, Assessing, Approved, Declined, Settled, Closed, Reopened };
+    /// <summary>Claims a handler is working on: used by caseload, ageing, workload and the max_open_claims check.
+    /// Triaged is included, otherwise triaged claims would vanish from those views.</summary>
+    public static readonly string[] Open = { New, Triaged, Assessing, Approved, Reopened };
+    public static readonly string[] Active = Open;
+    /// <summary>Everything that is not Declined or Closed: the handler queue and the capacity check.</summary>
+    public static readonly string[] NonFinal = { New, Triaged, Assessing, Approved, Settled, Reopened };
 }

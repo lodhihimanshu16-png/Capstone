@@ -6,3 +6,4 @@ dist/
 *.user
 .env
 *.tsbuildinfo
+.claude/.hooks-paused

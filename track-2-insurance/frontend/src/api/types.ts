@@ -36,6 +36,107 @@ export interface Claim {
   excess: number;
   reopenedCount: number;
   reserveReviewDue: boolean;
+  assessedByUserId: number | null;
+  approvedByUserId: number | null;
+  settlementAmount: number | null;
+}
+
+export interface Region {
+  id: number;
+  code: string;
+  name: string;
+}
+
+export interface Handler {
+  id: number;
+  userId: number;
+  name: string;
+  email: string;
+  gradeId: number;
+  gradeCode: string;
+  approvalLimit: number;
+  regionId: number;
+  regionCode: string;
+  maxOpenClaims: number;
+  active: boolean;
+}
+
+// No password hash: the API no longer returns one (BR-24).
+export interface User {
+  id: number;
+  email: string;
+  role: string;
+  displayName: string;
+  active: boolean;
+  createdAt: string;
+}
+
+export type RequiredField = 'estimatedAmount' | 'approvedAmount' | 'settlementAmount' | 'reason';
+
+export interface NextAction {
+  action: string;
+  toStatus: string;
+  allowed: boolean;
+  blockedReason: string | null;
+  requires: RequiredField[];
+}
+
+export interface NextActions {
+  claimId: number;
+  claimNumber: string;
+  status: string;
+  isFinal: boolean;
+  daysInStage: number;
+  targetDays: number | null;
+  dueBy: string | null;
+  overdue: boolean;
+  actingUserApprovalLimit: number | null;
+  actions: NextAction[];
+  nextStep: string;
+}
+
+export interface QueueItem {
+  claimId: number;
+  claimNumber: string;
+  status: string;
+  productName: string;
+  policyholderName: string;
+  handlerName: string | null;
+  estimatedAmount: number;
+  reportedDate: string;
+  daysInStage: number;
+  targetDays: number;
+  overdue: boolean;
+  daysOverTarget: number;
+}
+
+export interface LimitBreach {
+  claimId: number;
+  claimNumber: string;
+  kind: 'BlockedAttempt' | 'ApprovedAboveLimit';
+  amount: number;
+  limit: number | null;
+  overBy: number;
+  userId: number;
+  userName: string;
+  gradeCode: string | null;
+  regionCode: string;
+  occurredAt: string;
+  reason: string | null;
+}
+
+export interface ChangeStatusBody {
+  status: string;
+  changedByUserId: number;
+  reason?: string | null;
+  estimatedAmount?: number | null;
+  approvedAmount?: number | null;
+  settlementAmount?: number | null;
+}
+
+export interface ReopenBody {
+  changedByUserId: number;
+  reason: string;
 }
 
 export interface ClaimNote {

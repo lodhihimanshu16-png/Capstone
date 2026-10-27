@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using FluentValidation;
 using Harbourline.Api.Domain;
 using Harbourline.Api.Dtos;
@@ -39,11 +40,12 @@ public class ProductServiceTests
 public class PolicyPricingTests
 {
     [Fact]
-    public void Renewal_discount_is_capped_at_20_percent()
+    // The cap in PolicyPricing.NoClaimsDiscount is 30 percent (6 years x 5 percent). The old test was named "20 percent"
+    // and asserted "<= 0.30", which would have passed for any discount at all.
+    public void Renewal_discount_is_capped_at_30_percent()
     {
-        var discount = PolicyPricing.NoClaimsDiscount(9);
-
-        Assert.True(discount <= 0.30m);
+        Assert.Equal(0.30m, PolicyPricing.NoClaimsDiscount(9));   // above the cap: exactly the cap
+        Assert.Equal(0.25m, PolicyPricing.NoClaimsDiscount(5));   // below the cap: 5 years x 5 percent
     }
 
     [Fact]
@@ -55,18 +57,31 @@ public class PolicyPricingTests
 
 public class ClaimRulesTests
 {
+    // ASSUMPTION to be reconciled with the backend: the clock-based signature is
+    // ClaimRules.IsReserveReviewDue(DateTime lastNoteAtUtc, DateTime nowUtc). The old form read DateTime.Now, so
+    // these tests passed or failed depending on the day they ran. All dates here are fixed.
+    private static readonly DateTime Now = new(2026, 10, 20, 10, 0, 0, DateTimeKind.Utc);
+
     [Fact]
     public void Reserve_review_is_due_after_one_month()
     {
-        var lastNote = DateTime.Now.AddDays(-30);
+        var lastNote = new DateTime(2026, 9, 20, 15, 0, 0, DateTimeKind.Utc);   // one calendar month before Now
 
-        Assert.True(ClaimRules.IsReserveReviewDue(lastNote));
+        Assert.True(ClaimRules.IsReserveReviewDue(lastNote, Now));
+    }
+
+    [Fact]
+    public void Reserve_review_is_not_due_one_day_before_the_month_is_up()
+    {
+        var lastNote = new DateTime(2026, 9, 21, 9, 0, 0, DateTimeKind.Utc);
+
+        Assert.False(ClaimRules.IsReserveReviewDue(lastNote, Now));
     }
 
     [Fact]
     public void Reserve_review_is_not_due_for_a_note_made_today()
     {
-        Assert.False(ClaimRules.IsReserveReviewDue(DateTime.Now));
+        Assert.False(ClaimRules.IsReserveReviewDue(Now, Now));
     }
 
     [Fact]
@@ -112,39 +127,47 @@ public class ValidatorTests
 
 public class ClaimServiceTests
 {
-    private readonly Mock<IClaimRepository> _claims = new();
-    private readonly Mock<IHandlerRepository> _handlers = new();
-
-    private ClaimService Build() => new(_claims.Object, Mock.Of<IPolicyRepository>(), Mock.Of<IPolicyholderRepository>(),
-        Mock.Of<IProductRepository>(), _handlers.Object, Mock.Of<IClaimNoteRepository>(), new CreateClaimRequestValidator(),
-        new UpdateClaimRequestValidator(), new ChangeStatusRequestValidator(), new ReopenClaimRequestValidator());
+    // These three tests used to build ClaimService with Moq repositories, which tied them to its constructor. The
+    // constructor changes with the claims workflow, so the same intent is now checked through HTTP (ApiFactory).
+    // Original behaviour kept: BusinessRuleException maps to 422.
 
     [Fact]
     public async Task Assign_rejects_inactive_handler()
     {
-        _claims.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new Claim { Id = 1, Status = "New" });
-        _handlers.Setup(r => r.GetByIdAsync(4)).ReturnsAsync(new Handler { Id = 4, Name = "Sophie Lang", Active = false, MaxOpenClaims = 8 });
+        using var f = new ApiFactory();
+        var c = f.CreateClient();
+        var id = f.AddClaim(s => s.Status = "New");
 
-        await Assert.ThrowsAsync<BusinessRuleException>(() => Build().AssignAsync(1, new AssignClaimRequest(4)));
+        var response = await c.PostAsJsonAsync($"/api/claims/{id}/assign", new { handlerId = Ids.HalInactiveHandler });
+
+        await response.AssertProblem(System.Net.HttpStatusCode.UnprocessableEntity);
+        Assert.True((await c.Claim(id)).IsNull("handlerId"), "the claim must not be given to an inactive handler");
     }
 
     [Fact]
     public async Task Reopen_is_refused_for_a_claim_that_is_still_open()
     {
-        _claims.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(new Claim { Id = 1, Status = "Assessing" });
+        using var f = new ApiFactory();
+        var c = f.CreateClient();
+        var id = f.AddClaim(s => { s.Status = "Assessing"; s.HandlerId = Ids.Ben; });
 
-        await Assert.ThrowsAsync<BusinessRuleException>(() => Build().ReopenAsync(1, new ReopenClaimRequest(2, "New evidence")));
+        var response = await c.Reopen(id, Ids.Carl, "New evidence");
+
+        await response.AssertProblem(System.Net.HttpStatusCode.UnprocessableEntity);
+        await c.AssertStatus(id, "Assessing");
     }
 
     [Fact]
     public async Task Reopen_increments_the_reopened_count()
     {
-        var claim = new Claim { Id = 1, Status = "Settled", ReopenedCount = 1 };
-        _claims.Setup(r => r.GetByIdAsync(1)).ReturnsAsync(claim);
+        using var f = new ApiFactory();
+        var c = f.CreateClient();
+        var id = f.AddClaim(s => { s.Status = "Settled"; s.HandlerId = Ids.Ben; s.ReopenedCount = 1; s.Approved = 5000m; s.Paid = 4750m; s.Settlement = 4750m; });
 
-        await Build().ReopenAsync(1, new ReopenClaimRequest(2, "Additional damage found"));
+        var claim = await (await c.Reopen(id, Ids.Carl, "Additional damage found")).AssertOk();
 
-        Assert.Equal(2, claim.ReopenedCount);
-        Assert.Equal("Reopened", claim.Status);
+        Assert.Equal(2, claim.Int("reopenedCount"));
+        Assert.Equal("Reopened", claim.Str("status"));
+        Assert.Equal(2, (await c.Claim(id)).Int("reopenedCount"));
     }
 }

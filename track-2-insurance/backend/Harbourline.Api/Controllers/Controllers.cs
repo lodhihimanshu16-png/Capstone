@@ -218,8 +218,15 @@ public class ClaimsController : ControllerBase
         [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
         Ok(await _claims.ListAsync(new ClaimFilter { Status = status, HandlerId = handlerId, RegionId = regionId, Page = page, PageSize = pageSize }));
 
+    [HttpGet("queue")]
+    public async Task<ActionResult<PagedResult<QueueItemDto>>> Queue([FromQuery] int? handlerId, [FromQuery] int? regionId,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 25) => Ok(await _claims.QueueAsync(handlerId, regionId, page, pageSize));
+
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ClaimDto>> Get(int id) => Ok(await _claims.GetAsync(id));
+
+    [HttpGet("{id:int}/next-actions")]
+    public async Task<ActionResult<NextActionsDto>> NextActions(int id, [FromQuery] int? actingUserId) => Ok(await _claims.GetNextActionsAsync(id, actingUserId));
 
     [HttpPost]
     public async Task<ActionResult<ClaimDto>> Create(CreateClaimRequest request, [FromHeader(Name = "X-User-Id")] int userId = 1)
@@ -284,6 +291,10 @@ public class ReportsController : ControllerBase
 
     [HttpGet("handler-workload")]
     public async Task<ActionResult<List<HandlerWorkloadRow>>> Workload() => Ok(await _reports.WorkloadAsync());
+
+    [HttpGet("limits-breaches")]
+    public async Task<ActionResult<List<LimitBreachDto>>> LimitsBreaches([FromQuery] DateOnly? from, [FromQuery] DateOnly? to, [FromQuery] int? regionId) =>
+        Ok(await _reports.LimitsBreachesAsync(from, to, regionId));
 
     [HttpGet("claims-summary")]
     public async Task<ActionResult<List<ClaimsSummaryRow>>> Summary() => Ok(await _reports.SummaryAsync());

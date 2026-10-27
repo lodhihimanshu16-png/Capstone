@@ -17,6 +17,15 @@ th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #e2
 .badge-settled, .badge-closed, .badge-active { background: #d4efdf; }
 .badge-declined, .badge-cancelled { background: #f5d0d0; }
 .badge-reopened { background: #fde7c0; }
+tr.overdue { background: #fdecea; }
+tr.overdue td:first-child { border-left: 3px solid #b00020; }
+.flag-overdue { color: #b00020; font-weight: 600; }
+.panel { background: #fff; padding: 1rem; border: 1px solid #e2e8ee; margin: 1rem 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.75rem 0; }
+.blocked-reason { display: block; font-size: 0.8rem; color: #52606d; }
+.form-row { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.75rem; max-width: 24rem; }
+.field-error { color: #b00020; margin: 0.25rem 0; }
+.badge-triaged { background: #d6e4f5; }
 .facts { display: grid; grid-template-columns: 8rem 1fr; gap: 0.25rem 1rem; }
 .notes { list-style: none; padding: 0; }
 .notes li { background: #fff; padding: 0.5rem 0.75rem; margin-bottom: 0.5rem; border-left: 3px solid #0b3954; }

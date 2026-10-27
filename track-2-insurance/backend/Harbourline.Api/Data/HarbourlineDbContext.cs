@@ -19,6 +19,7 @@ public class HarbourlineDbContext : DbContext
     public DbSet<ClaimNote> ClaimNotes => Set<ClaimNote>();
     public DbSet<ClaimStatusHistory> ClaimStatusHistory => Set<ClaimStatusHistory>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
+    public DbSet<ClaimApprovalAttempt> ClaimApprovalAttempts => Set<ClaimApprovalAttempt>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -33,6 +34,7 @@ public class HarbourlineDbContext : DbContext
         b.Entity<ClaimNote>().ToTable("claim_notes");
         b.Entity<ClaimStatusHistory>().ToTable("claim_status_history");
         b.Entity<ImportBatch>().ToTable("import_batches");
+        b.Entity<ClaimApprovalAttempt>().ToTable("claim_approval_attempts");
 
         b.Entity<Region>().Property(x => x.Code).HasMaxLength(10);
         b.Entity<Product>().Property(x => x.Code).HasMaxLength(20);
@@ -43,8 +45,32 @@ public class HarbourlineDbContext : DbContext
         b.Entity<Claim>().Property(x => x.ClaimNumber).HasMaxLength(20);
         b.Entity<Claim>().Property(x => x.Description).HasMaxLength(1000);
         b.Entity<Claim>().HasIndex(x => x.ClaimNumber).IsUnique();
-        b.Entity<ClaimNote>().Property(x => x.Body).HasMaxLength(2000);
+        b.Entity<ClaimNote>().Property(x => x.Body).HasMaxLength(500);
         b.Entity<ClaimStatusHistory>().Property(x => x.Reason).HasMaxLength(300);
+        b.Entity<ClaimApprovalAttempt>().Property(x => x.GradeCode).HasMaxLength(10);
+        b.Entity<ClaimApprovalAttempt>().Property(x => x.Reason).HasMaxLength(300);
+
+        // Optimistic concurrency (BR-15): the SQL column is row_version INT NOT NULL DEFAULT 0.
+        b.Entity<Claim>().Property(x => x.RowVersion).IsConcurrencyToken();
+        b.Entity<Claim>().HasIndex(x => new { x.HandlerId, x.Status }).HasDatabaseName("ix_claims_handler_status");
+        b.Entity<ClaimStatusHistory>().HasIndex(x => new { x.ClaimId, x.ToStatus, x.ChangedAt }).HasDatabaseName("ix_claim_history_claim_to_changed");
+        b.Entity<ClaimApprovalAttempt>().HasIndex(x => x.ClaimId).HasDatabaseName("ix_claim_attempts_claim");
+        b.Entity<ClaimApprovalAttempt>().HasIndex(x => x.UserId).HasDatabaseName("ix_claim_attempts_user");
+        b.Entity<ClaimApprovalAttempt>().HasIndex(x => x.AttemptedAt).HasDatabaseName("ix_claim_attempts_at");
+        b.Entity<Claim>().HasIndex(x => x.AssessedByUserId).HasDatabaseName("ix_claims_assessed_by");
+        b.Entity<Claim>().HasIndex(x => x.ApprovedByUserId).HasDatabaseName("ix_claims_approved_by");
+        b.Entity<Claim>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.AssessedByUserId).HasConstraintName("fk_claims_assessed_by");
+        b.Entity<Claim>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.ApprovedByUserId).HasConstraintName("fk_claims_approved_by");
+        b.Entity<ClaimApprovalAttempt>().HasOne<Claim>().WithMany().HasForeignKey(x => x.ClaimId).HasConstraintName("fk_claim_attempts_claim");
+        b.Entity<ClaimApprovalAttempt>().HasOne<AppUser>().WithMany().HasForeignKey(x => x.UserId).HasConstraintName("fk_claim_attempts_user");
+
+        // Every money column in the SQL is DECIMAL(12,2).
+        foreach (var entity in b.Model.GetEntityTypes())
+            foreach (var property in entity.GetProperties().Where(p => p.ClrType == typeof(decimal) || p.ClrType == typeof(decimal?)))
+            {
+                property.SetPrecision(12);
+                property.SetScale(2);
+            }
 
         b.Entity<Claim>().HasOne(x => x.Policy).WithMany().HasForeignKey(x => x.PolicyId);
         b.Entity<Claim>().HasOne(x => x.Handler).WithMany().HasForeignKey(x => x.HandlerId);

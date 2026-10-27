@@ -7,7 +7,7 @@ public record ProductRequest(string Code, string Name, string Line, decimal Base
 
 public record HandlerGradeDto(int Id, string Code, string Name, decimal ApprovalLimit);
 
-public record UserDto(int Id, string Email, string PasswordHash, string Role, string DisplayName, bool Active, DateTime CreatedAt);
+public record UserDto(int Id, string Email, string Role, string DisplayName, bool Active, DateTime CreatedAt);
 public record LoginRequest(string Email, string Password);
 public record LoginResponse(int UserId, string DisplayName, string Role, int? HandlerId);
 public record SetActiveRequest(bool Active);
@@ -31,13 +31,25 @@ public record ClaimListItemDto(int Id, string ClaimNumber, string PolicyNumber, 
     string Status, string ClaimType, DateOnly LossDate, decimal EstimatedAmount, int NoteCount, int ReopenedCount);
 public record ClaimDto(int Id, string ClaimNumber, int PolicyId, int? HandlerId, string ClaimType, string Status, DateOnly LossDate, DateOnly ReportedDate,
     string Description, decimal EstimatedAmount, decimal? ApprovedAmount, decimal? PaidAmount, decimal Excess, int RegionId, int ReopenedCount,
-    DateOnly? ClosedDate, string? ExternalRef, DateTime CreatedAt, DateTime UpdatedAt, bool ReserveReviewDue);
+    DateOnly? ClosedDate, string? ExternalRef, DateTime CreatedAt, DateTime UpdatedAt, bool ReserveReviewDue,
+    int? AssessedByUserId, int? ApprovedByUserId, decimal? SettlementAmount);
 public record CreateClaimRequest(int PolicyId, string ClaimType, DateOnly LossDate, string Description, decimal EstimatedAmount);
 public record UpdateClaimRequest(string ClaimType, string Description, decimal EstimatedAmount, decimal? ApprovedAmount, decimal? PaidAmount);
-public record ChangeStatusRequest(string Status, int ChangedByUserId, string? Reason);
+public record ChangeStatusRequest(string Status, int ChangedByUserId, string? Reason,
+    decimal? EstimatedAmount = null, decimal? ApprovedAmount = null, decimal? SettlementAmount = null);
 public record AssignClaimRequest(int HandlerId);
 public record ReopenClaimRequest(int ChangedByUserId, string Reason);
-public record ClaimHistoryDto(int Id, int ClaimId, string? FromStatus, string ToStatus, int ChangedByUserId, DateTime ChangedAt, string? Reason);
+public record ClaimHistoryDto(int Id, int ClaimId, string? FromStatus, string ToStatus, int ChangedByUserId, DateTime ChangedAt, string? Reason, decimal? Amount);
+
+public record NextActionDto(string Action, string ToStatus, bool Allowed, string? BlockedReason, string[] Requires);
+public record NextActionsDto(int ClaimId, string ClaimNumber, string Status, bool IsFinal, int DaysInStage,
+    int? TargetDays, DateOnly? DueBy, bool Overdue, decimal? ActingUserApprovalLimit,
+    List<NextActionDto> Actions, string NextStep);
+public record QueueItemDto(int ClaimId, string ClaimNumber, string Status, string ProductName, string PolicyholderName,
+    string? HandlerName, decimal EstimatedAmount, DateOnly ReportedDate, int DaysInStage, int TargetDays,
+    bool Overdue, int DaysOverTarget);
+public record LimitBreachDto(int ClaimId, string ClaimNumber, string Kind, decimal Amount, decimal? Limit, decimal OverBy,
+    int UserId, string UserName, string? GradeCode, string RegionCode, DateTime OccurredAt, string? Reason);
 
 public record ClaimNoteDto(int Id, int ClaimId, int AuthorUserId, string NoteType, string Body, DateTime CreatedAt);
 public record CreateNoteRequest(int AuthorUserId, string NoteType, string Body);

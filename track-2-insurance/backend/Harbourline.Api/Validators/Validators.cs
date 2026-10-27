@@ -77,9 +77,30 @@ public class ChangeStatusRequestValidator : AbstractValidator<ChangeStatusReques
 {
     public ChangeStatusRequestValidator()
     {
-        RuleFor(x => x.Status).Must(s => ClaimStatuses.All.Contains(s)).WithMessage("Unknown claim status.");
-        RuleFor(x => x.Reason).MaximumLength(300);
+        RuleFor(x => x.Status).Must(s => s != null && ClaimStatuses.All.Contains(s))
+            .WithMessage(x => $"Unknown claim status '{x.Status}'. Allowed statuses: {string.Join(", ", ClaimStatuses.All)}.");
+        RuleFor(x => x.Reason).MaximumLength(300).WithMessage("Reason must be at most 300 characters.");
+
+        // Shape of the amounts: positive where the target needs one, never more than 2 decimals.
+        RuleFor(x => x.EstimatedAmount).NotNull().GreaterThan(0)
+            .WithMessage("estimatedAmount is required for Triaged and must be above 0.00.")
+            .When(x => x.Status == ClaimStatuses.Triaged);
+        RuleFor(x => x.ApprovedAmount).NotNull().GreaterThan(0)
+            .WithMessage("approvedAmount is required for Approved and must be above 0.00.")
+            .When(x => x.Status == ClaimStatuses.Approved);
+        RuleFor(x => x.SettlementAmount).GreaterThanOrEqualTo(0)
+            .WithMessage("settlementAmount must not be negative.")
+            .When(x => x.SettlementAmount.HasValue);
+
+        RuleFor(x => x.EstimatedAmount).Must(HasAtMostTwoDecimals).WithMessage("estimatedAmount must have at most 2 decimals.")
+            .When(x => x.EstimatedAmount.HasValue);
+        RuleFor(x => x.ApprovedAmount).Must(HasAtMostTwoDecimals).WithMessage("approvedAmount must have at most 2 decimals.")
+            .When(x => x.ApprovedAmount.HasValue);
+        RuleFor(x => x.SettlementAmount).Must(HasAtMostTwoDecimals).WithMessage("settlementAmount must have at most 2 decimals.")
+            .When(x => x.SettlementAmount.HasValue);
     }
+
+    private static bool HasAtMostTwoDecimals(decimal? value) => value is null || decimal.Round(value.Value, 2) == value.Value;
 }
 
 public class ReopenClaimRequestValidator : AbstractValidator<ReopenClaimRequest>
@@ -95,6 +116,6 @@ public class CreateNoteRequestValidator : AbstractValidator<CreateNoteRequest>
     public CreateNoteRequestValidator()
     {
         RuleFor(x => x.NoteType).Must(t => t is "Update" or "Call" or "Assessment" or "Reserve" or "Internal");
-        RuleFor(x => x.Body).NotEmpty().MaximumLength(2000);
+        RuleFor(x => x.Body).NotEmpty().MaximumLength(500);
     }
 }
