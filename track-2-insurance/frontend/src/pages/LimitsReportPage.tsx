@@ -9,9 +9,16 @@ import { useApi } from '../hooks/useApi';
 
 const KIND_LABEL = { BlockedAttempt: 'Blocked attempt', ApprovedAboveLimit: 'Approved above limit' };
 
+// Default period: the last 365 days up to today, so the screen does not go stale when the year changes.
+function daysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function LimitsReportPage() {
-  const [from, setFrom] = useState('2026-01-01');
-  const [to, setTo] = useState('2026-12-31');
+  const [from, setFrom] = useState(daysAgo(365));
+  const [to, setTo] = useState(daysAgo(0));
   const [regionId, setRegionId] = useState('');
   const [reload, setReload] = useState(0);
   const regions = useApi(() => handlersApi.regions(), []);

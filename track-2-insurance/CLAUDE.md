@@ -25,7 +25,7 @@ Internal claims system for Harbourline Insurance (UK home and motor). Inherited,
 - Claim rules: `Services/Services.cs` (`ClaimService`) and `Services/Rules.cs` (`ClaimRules`, `PolicyPricing`, `LossRatioCalculator`).
 - Statuses: `ClaimStatuses` in `Domain/Entities.cs`.
 - Reports: computed per request in `ReportRepository` (`Repositories/Repositories.cs`). There is no ReportJob and no Redis.
-- Bordereau CSV importer: `Imports/BordereauImportService.cs`. Do not change its behaviour without tests.
+- Bordereau CSV importer: `Imports/BordereauImportService.cs`. Do not change its behaviour without changing `ImporterCharacterisationTests` on purpose.
 - Ticket and review material: `docs/` (stakeholder brief, `bug-HLI-87.md`, `review-checklist.md`, `ci-failing-run.log`).
 
 ## Conventions seen in the code
@@ -43,13 +43,13 @@ Internal claims system for Harbourline Insurance (UK home and motor). Inherited,
 - New calls: `PUT /api/claims/{id}/status` (the move), `POST /api/claims/{id}/reopen`, `GET /api/claims/{id}/next-actions`, `GET /api/claims/queue`, `GET /api/reports/limits-breaches`. UI: `/queue`, `/reports/limits-breaches`, and a Next steps panel on the claim page.
 - The acting user is `changedByUserId` in the request, trusted without login. Refused approvals are saved in `claim_approval_attempts`.
 - Time comes from an injected `TimeProvider`; never `DateTime.Now`. Claims carry `row_version`; a lost race gives 409.
-- Tests: `dotnet test` in `backend/` runs 69 tests, 48 named `AC_nn_...` after the spec. Four need MySQL: set `HARBOURLINE_TEST_MYSQL_ADMIN` to an admin connection string (never commit it); `REQUIRE_MYSQL_TESTS=1` makes a missing one fail instead of skip.
+- Tests: `dotnet test` in `backend/` runs 123 tests (4 need MySQL), 48 named `AC_nn_...` after the spec. Four need MySQL: set `HARBOURLINE_TEST_MYSQL_ADMIN` to an admin connection string (never commit it); `REQUIRE_MYSQL_TESTS=1` makes a missing one fail instead of skip.
 
 ## Known traps (do not rely on these being right)
 - `ClaimRepository.NextSequenceAsync` uses `MAX(id)+1`, which can produce duplicate claim numbers under concurrent creates (not fixed: claim creation is outside the feature).
-- The loss-ratio report counts one row per `Settled` history entry (ticket HLI-87, not yet fixed).
+- Loss ratio (ticket HLI-87) is fixed: `LossRatioAsync` counts each claim once however many `Settled` history rows it has (`docs/debug-report.md`). Open questions for Finance are listed there. Do not join report queries on `claim_status_history` rows without checking for repeats.
 - `db-setup/01-create-users.sql` and `README.md` contain passwords. `compose.yaml` and `.github/workflows/ci.yml` are still broken.
-- The bordereau importer has no tests yet and updates existing claims whatever their workflow state.
+- The bordereau importer is split into `Imports/BordereauCsv.cs`, `BordereauRowValidator.cs` and `BordereauImportService.cs` and is pinned by 52 characterisation tests (`ImporterCharacterisationTests`). Its odd behaviour (see `docs/refactor-note.md`) is kept on purpose; it still updates existing claims whatever their workflow state.
 - In-memory tests cannot show MySQL behaviour (locks, deadlocks, column lengths, query counts); those need the MySQL tests.
 - `ReportService` hard-codes its default report dates; the importer hard-codes 2026-10-01 as today.
 

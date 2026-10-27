@@ -26,8 +26,15 @@ public static class LossRatioCalculator
 /// <summary>BR-22: finds card numbers (13 to 19 digits that pass the Luhn check) in free text.</summary>
 public static class CardNumberDetector
 {
-    // A run of digits that may be split by single spaces or hyphens.
-    private static readonly Regex DigitRun = new(@"\d(?:[ -]?\d)*", RegexOptions.Compiled);
+    // A run of digits that may be split by up to two separator characters (space, hyphen, dot, slash, underscore, tab, line break).
+    private static readonly Regex DigitRun = new(@"\d(?:[ \-./_\t\r\n]{0,2}\d)*", RegexOptions.Compiled);
+
+    /// <summary>Throws the same refusal everywhere free text is accepted, naming the field so the user can fix it.</summary>
+    public static void RejectIfCardNumber(string? text, string fieldName)
+    {
+        if (ContainsCardNumber(text))
+            throw new Infrastructure.BusinessRuleException($"The {fieldName} looks like it contains a card number (13 to 19 digits that pass the card check). Card numbers are not stored in this system: remove the number and try again.");
+    }
 
     public static bool ContainsCardNumber(string? text)
     {
@@ -35,7 +42,10 @@ public static class CardNumberDetector
         foreach (Match m in DigitRun.Matches(text))
         {
             var digits = new string(m.Value.Where(char.IsDigit).ToArray());
-            if (digits.Length is >= 13 and <= 19 && PassesLuhn(digits)) return true;
+            // Every 13 to 19 digit window, so a number written right after other digits ("amount 250 4111 ...") is still found.
+            for (var length = 13; length <= Math.Min(19, digits.Length); length++)
+                for (var start = 0; start + length <= digits.Length; start++)
+                    if (PassesLuhn(digits.Substring(start, length))) return true;
         }
         return false;
     }

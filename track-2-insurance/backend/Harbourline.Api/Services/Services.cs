@@ -391,6 +391,7 @@ public class ClaimService : IClaimService
     public async Task<ClaimDto> CreateAsync(CreateClaimRequest request, int userId)
     {
         await _createValidator.ValidateAndThrowAsync(request);
+        CardNumberDetector.RejectIfCardNumber(request.Description, "description");
         var policy = await _policies.GetByIdAsync(request.PolicyId) ?? throw new NotFoundException($"Policy {request.PolicyId} was not found.");
         if (policy.Status == "Cancelled") throw new BusinessRuleException("Claims cannot be registered against a cancelled policy.");
 
@@ -422,6 +423,7 @@ public class ClaimService : IClaimService
     public async Task<ClaimDto> UpdateAsync(int id, UpdateClaimRequest request)
     {
         await _updateValidator.ValidateAndThrowAsync(request);
+        CardNumberDetector.RejectIfCardNumber(request.Description, "description");
         var claim = await _claims.GetByIdAsync(id) ?? throw new NotFoundException($"Claim {id} was not found.");
 
         // BR-12: a Closed or Declined claim cannot be edited.
@@ -488,6 +490,7 @@ public class ClaimService : IClaimService
     public async Task<ClaimDto> ChangeStatusAsync(int id, ChangeStatusRequest request)
     {
         await _statusValidator.ValidateAndThrowAsync(request);
+        CardNumberDetector.RejectIfCardNumber(request.Reason, "reason");
         var claim = await _claims.GetByIdAsync(id) ?? throw new NotFoundException($"Claim {id} was not found.");
         var from = claim.Status;
         var to = request.Status;
@@ -712,6 +715,9 @@ public class ClaimService : IClaimService
     public async Task<ClaimDto> AssignAsync(int id, AssignClaimRequest request)
     {
         var claim = await _claims.GetByIdAsync(id) ?? throw new NotFoundException($"Claim {id} was not found.");
+        // BR-12: a Closed or Declined claim cannot be changed, and that includes who owns it.
+        if (claim.Status is ClaimStatuses.Closed or ClaimStatuses.Declined)
+            throw new BusinessRuleException($"Claim {claim.ClaimNumber} is {claim.Status}, so its handler cannot be changed.");
         var handler = await _handlers.GetByIdAsync(request.HandlerId) ?? throw new NotFoundException($"Handler {request.HandlerId} was not found.");
         if (!handler.Active) throw new BusinessRuleException("Handler is not active.");
 
@@ -728,6 +734,7 @@ public class ClaimService : IClaimService
     public async Task<ClaimDto> ReopenAsync(int id, ReopenClaimRequest request)
     {
         await _reopenValidator.ValidateAndThrowAsync(request);
+        CardNumberDetector.RejectIfCardNumber(request.Reason, "reason");
         var claim = await _claims.GetByIdAsync(id) ?? throw new NotFoundException($"Claim {id} was not found.");
         if (claim.Status != ClaimStatuses.Settled && claim.Status != ClaimStatuses.Closed)
             throw new BusinessRuleException(claim.Status == ClaimStatuses.Declined
@@ -782,12 +789,14 @@ public class ClaimNoteService : IClaimNoteService
     private readonly IClaimNoteRepository _notes;
     private readonly IClaimRepository _claims;
     private readonly IValidator<CreateNoteRequest> _validator;
+    private readonly TimeProvider _clock;
 
-    public ClaimNoteService(IClaimNoteRepository notes, IClaimRepository claims, IValidator<CreateNoteRequest> validator)
+    public ClaimNoteService(IClaimNoteRepository notes, IClaimRepository claims, IValidator<CreateNoteRequest> validator, TimeProvider clock)
     {
         _notes = notes;
         _claims = claims;
         _validator = validator;
+        _clock = clock;
     }
 
     public async Task<List<ClaimNoteDto>> ListAsync(int claimId)
@@ -801,11 +810,10 @@ public class ClaimNoteService : IClaimNoteService
         await _validator.ValidateAndThrowAsync(request);
         if (await _claims.GetByIdAsync(claimId) == null) throw new NotFoundException($"Claim {claimId} was not found.");
         // BR-22: the system stores no card numbers.
-        if (CardNumberDetector.ContainsCardNumber(request.Body))
-            throw new BusinessRuleException("The note looks like it contains a card number (13 to 19 digits that pass the card check). Card numbers are not stored in this system: remove the number and save the note again.");
+        CardNumberDetector.RejectIfCardNumber(request.Body, "note");
         var note = new ClaimNote
         {
-            ClaimId = claimId, AuthorUserId = request.AuthorUserId, NoteType = request.NoteType, Body = request.Body, CreatedAt = DateTime.UtcNow
+            ClaimId = claimId, AuthorUserId = request.AuthorUserId, NoteType = request.NoteType, Body = request.Body, CreatedAt = _clock.GetUtcNow().UtcDateTime
         };
         return ClaimMapper.ToDto(await _notes.AddAsync(note));
     }

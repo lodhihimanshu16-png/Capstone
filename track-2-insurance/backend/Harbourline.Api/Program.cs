@@ -58,8 +58,12 @@ if (!app.Environment.IsEnvironment("Testing"))
     DatabaseMigrator.Run(connectionString);
 
 app.UseExceptionHandler();
-app.UseSwagger();
-app.UseSwaggerUI();
+// Swagger is a ready-made console for an API with no login, so it is not served in Production.
+if (!app.Environment.IsProduction())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.UseCors();
 app.MapControllers();
 app.Run();

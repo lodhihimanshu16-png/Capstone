@@ -530,11 +530,16 @@ public class ReportRepository : IReportRepository
             .Select(g => new { ProductId = g.Key, Premium = g.Sum(p => p.AnnualPremium) })
             .ToListAsync();
 
+        // HLI-87: a claim that was settled, reopened and settled again has several "Settled" history rows.
+        // Join on the claims that have at least one such row in the period, not on the rows themselves,
+        // so each claim is counted once and its paid amount is added once.
+        var settledInPeriod = _db.ClaimStatusHistory.AsNoTracking()
+            .Where(h => h.ToStatus == ClaimStatuses.Settled && h.ChangedAt >= periodStart && h.ChangedAt < toExclusive)
+            .Select(h => h.ClaimId);
         var settlements = await (
-            from h in _db.ClaimStatusHistory.AsNoTracking()
-            join c in _db.Claims.AsNoTracking() on h.ClaimId equals c.Id
+            from c in _db.Claims.AsNoTracking()
             join p in _db.Policies.AsNoTracking() on c.PolicyId equals p.Id
-            where h.ToStatus == ClaimStatuses.Settled && h.ChangedAt >= periodStart && h.ChangedAt < toExclusive
+            where settledInPeriod.Contains(c.Id)
             select new { p.ProductId, Paid = c.PaidAmount ?? 0m }
         ).ToListAsync();
 
